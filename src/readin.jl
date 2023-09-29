@@ -730,16 +730,20 @@ function readWind(fileNameWind, gap_t)
     # read in the nominal wind generation
     WindData = readdlm(fileNameWind, ',');
     mLoc,nLoc = size(WindData);
-    hData = Dict();
+    gen = Dict();
+    cost = Dict();
     for i in 1:mLoc
         # for each node
-        hData[WindData[i,1]] = WindData[i,2:gap_t:nLoc];
+        gen[WindData[i,1]] = WindData[i,3:gap_t:nLoc];
+        cost[WindData[i,1]] = WindData[i,2];
     end
+    hList = [WindData[i,1] for i in 1:mLoc];
+    hData = windData(hList,gen,cost);
     return hData;
 end
 
 # read in the deterministic demand value
-function readDemand(fileNameP, fileNameQ, fileType)
+function readDemand(fileNameP, fileNameQ, fileType, gap_t)
     # read in the battery information: charging/discharging factor, capacity
     if fileType == "csv"
         # csv file format:
@@ -747,14 +751,14 @@ function readDemand(fileNameP, fileNameQ, fileType)
         mp,np = size(dataRawP);
         pd = Dict();
         for i in 1:mp
-            pd[Int64(dataRawP[i,1])] = dataRawP[i,2:np];
+            pd[Int64(dataRawP[i,1])] = dataRawP[i,2:gap_t:np];
         end
 
         dataRawQ = readdlm(fileNameQ, ',');
         mq,nq = size(dataRawQ);
         qd = Dict();
         for i in 1:mq
-            qd[Int64(dataRawQ[i,1])] = dataRawQ[i,2:nq];
+            qd[Int64(dataRawQ[i,1])] = dataRawQ[i,2:gap_t:nq];
         end
         T = nq - 1;
         dData = demandData(T,pd,qd);
@@ -764,7 +768,7 @@ function readDemand(fileNameP, fileNameQ, fileType)
     end
 end
 
-function readInData(i, caseList, cz = 1e4, Δt = 0.25, gap_t = 4)
+function readInData(i, caseList, cz = 1e4, Δt = 0.25, gap_t = 1)
     fileAdd = "../data/$(caseList[i])/case$(caseList[i]).m";
     fData = readStatic(fileAdd,cz,Δt);
     bAdd = "../data/$(caseList[i])/testDataB_$(caseList[i]).csv";
@@ -773,7 +777,7 @@ function readInData(i, caseList, cz = 1e4, Δt = 0.25, gap_t = 4)
     hData = readWind(hAdd,gap_t);
     pAdd = "../data/$(caseList[i])/testDataP_$(caseList[i]).csv";
     qAdd = "../data/$(caseList[i])/testDataQ_$(caseList[i]).csv";
-    dData = readDemand(pAdd,qAdd,"csv");
+    dData = readDemand(pAdd,qAdd,"csv",gap_t);
     return fData, bData, hData, dData;
 end
   
@@ -882,8 +886,8 @@ function makeUAData(fData,hData,dData,T,dαtop = 0,dαbot = 0,hαtop = 0,hαbot 
     end
 
     for i in fData.IDList
-        if i in keys(hData)
-            uData[i] = uncertainData(DPmax[i], DPmin[i], DQmax[i], DQmin[i], DP0[i], DQ0[i], GPmax[i], GPmin[i], hData[i]);
+        if i in hData.hList
+            uData[i] = uncertainData(DPmax[i], DPmin[i], DQmax[i], DQmin[i], DP0[i], DQ0[i], GPmax[i], GPmin[i], hData.ph[i]);
         else
             uData[i] = uncertainData(DPmax[i], DPmin[i], DQmax[i], DQmin[i], DP0[i], DQ0[i], GPmax[i], GPmin[i], zeros(T));
         end

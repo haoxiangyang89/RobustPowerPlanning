@@ -98,3 +98,10 @@ struct demandData
   pd :: Dict{Any,Any}
   qd :: Dict{Any,Any}
 end
+
+struct windData
+    # demand data: active demand and reactive demand
+    hList :: Array{Int64,1}
+    ph :: Dict{Any,Any}
+    cost :: Dict{Any,Any}
+  end

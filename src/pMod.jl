@@ -1,5 +1,5 @@
 # create the first stage problem
-function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT)
+function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -10,9 +10,8 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT)
     end
     # scaling issue exists for this primal problem.
     mp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 0, "Threads" => 1));
-    # set of nodes with renewables
-    hList = [i for i in fData.IDList if i in keys(hData)];
+        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 1));
+    set_string_names_on_creation(mp, false);
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -60,7 +59,7 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT)
     # switching, battery setup, renewable expansion binary variables
     @variable(mp,x[k in fData.brList,t in 1:T],Bin);
     @variable(mp,y[i in fData.IDList],Bin);
-    @variable(mp,z[i in hList],Bin);
+    @variable(mp,z[i in hData.hList],Bin);
     @variable(mp,V >= 0);
 
     # set up the reference bus angle = 0
@@ -180,15 +179,15 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT)
     @constraint(mp,socConstraint2[k in fData.brList], [(vhat[k[1]]/(fData.τ1[k]^2) + vhat[k[2]]/(fData.τ2[k]^2))/sqrt(2); socList2[k]] in SecondOrderCone());
     @constraint(mp,socConstraint3[k in fData.brList],[tAux4[k]; socList3[k]] in SecondOrderCone());
     @constraint(mp,socConstraint4[i in fData.IDList],[tAux6[i]; socList4[i]] in SecondOrderCone());
-    @constraint(mp,socConstraint5[k in fData.brList],[(vhat[k[1]]/(fData.τ1[k]^2) + vhat[k[2]]/(fData.τ2[k]^2))/sqrt(2); socList5[k]] in SecondOrderCone);
+    @constraint(mp,socConstraint5[k in fData.brList],[(vhat[k[1]]/(fData.τ1[k]^2) + vhat[k[2]]/(fData.τ2[k]^2))/sqrt(2); socList5[k]] in SecondOrderCone());
 
-    @constraint(mp,auxConstr2[k in fData.brList],sqrt((1-cos(θu[k]))/(θu[k])^2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]]) == tAux2[k]);
+    @constraint(mp,auxConstr2[k in fData.brList],sqrt((1-cos(θu[1][k]))/(θu[1][k])^2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]]) == tAux2[k]);
     @constraint(mp,auxConstr3[k in fData.brList],cs[k] - 3/4 == tAux3[k]);
     @constraint(mp,auxConstr4[k in fData.brList],5/4 - cs[k] == tAux4[k]);
     @constraint(mp,sinMock1[k in fData.brList],
-                ss[k] <= cos(θu[k]/2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]] - θu[k]/2) + sin(θu[k]/2));
+                ss[k] <= cos(θu[1][k]/2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]] - θu[1][k]/2) + sin(θu[1][k]/2));
     @constraint(mp,sinMock2[k in fData.brList],
-                ss[k] >= cos(θu[k]/2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]] + θu[k]/2) - sin(θu[k]/2));
+                ss[k] >= cos(θu[1][k]/2)*((θ[k[1]] - fData.σ[k]) - θ[k[2]] + θu[1][k]/2) - sin(θu[1][k]/2));
     @constraint(mp,angleDiff1[k in fData.brList],(θ[k[1]] - fData.σ[k]) - θ[k[2]] <= θDmaxT[1][k]);
     @constraint(mp,angleDiff2[k in fData.brList],(θ[k[1]] - fData.σ[k]) - θ[k[2]] >= θDminT[1][k]);
     @constraint(mp,auxConstr5[i in fData.IDList],tAux5[i] == vhat[i] - 1/4);
@@ -260,9 +259,11 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT)
     @constraint(mp,switching[k in fData.brList,t in 2:T], x[k,t] <= x[k,t-1]);
     @constraint(mp,switching0[k in fData.brList], x[k,1] == 1);
     @constraint(mp,switching_rev[k in fData.brList,t in 1:T;k[1] < k[2]], x[k,t] == x[(k[2],k[1],k[3]),t]);
+    @constraint(mp,switching_lim, sum(x[k,T] for k in fData.brList if k[1] < k[2]) >= length(fData.brList)/2 - xLimit);
 
     @objective(mp, Min, fData.cz*sum(lpplus[i] + lpminus[i] + lqplus[i] + lqminus[i] for i in fData.IDList) + 
-        sum(fData.cp[i].params[2]*sp[i] for i in fData.genIDList) + V);
+        sum(fData.cp[i].params[2]*sp[i] for i in fData.genIDList) + V + sum(bData.cost[i]*y[i] for i in fData.IDList) + 
+        sum(hData.cost[i] * z[i] for i in hData.hList));
 
     return mp;
 end
@@ -280,8 +281,6 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     # scaling issue exists for this primal problem.
     subp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
         "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 0, "Threads" => 1));
-    # set of nodes with renewables
-    hList = [i for i in fData.IDList if i in keys(hData)];
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -329,7 +328,7 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     # switching, battery setup, renewable expansion binary variables
     @variable(subp,x[k in fData.brList,t in 2:T]);
     @variable(subp,y[i in fData.IDList]);
-    @variable(subp,z[i in hList]);
+    @variable(subp,z[i in hData.hList]);
     
     # set up the reference bus angle = 0
     for i in fData.IDList
@@ -468,15 +467,15 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     @constraint(subp,socConstraint2[k in fData.brList, t in 2:T], [(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList2[k,t]] in SecondOrderCone());
     @constraint(subp,socConstraint3[k in fData.brList, t in 2:T],[tAux4[k,t]; socList3[k,t]] in SecondOrderCone());
     @constraint(subp,socConstraint4[i in fData.IDList, t in 2:T],[tAux6[i,t]; socList4[i,t]] in SecondOrderCone());
-    @constraint(subp,socConstraint5[k in fData.brList, t in 2:T],[(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList5[k,t]] in SecondOrderCone);
+    @constraint(subp,socConstraint5[k in fData.brList, t in 2:T],[(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList5[k,t]] in SecondOrderCone());
 
-    @constraint(subp,auxConstr2[k in fData.brList, t in 2:T],sqrt((1-cos(θu[k,t]))/(θu[k,t])^2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t]) == tAux2[k,t]);
+    @constraint(subp,auxConstr2[k in fData.brList, t in 2:T],sqrt((1-cos(θu[t][k]))/(θu[t][k])^2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t]) == tAux2[k,t]);
     @constraint(subp,auxConstr3[k in fData.brList, t in 2:T],cs[k,t] - 3/4 == tAux3[k,t]);
     @constraint(subp,auxConstr4[k in fData.brList, t in 2:T],5/4 - cs[k,t] == tAux4[k,t]);
     @constraint(subp,sinMock1[k in fData.brList, t in 2:T],
-                ss[k,t] <= cos(θu[k,t]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] - θu[k,t]/2) + sin(θu[k,t]/2));
+                ss[k,t] <= cos(θu[t][k]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] - θu[t][k]/2) + sin(θu[t][k]/2));
     @constraint(subp,sinMock2[k in fData.brList, t in 2:T],
-                ss[k,t] >= cos(θu[k,t]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] + θu[k,t]/2) - sin(θu[k,t]/2));
+                ss[k,t] >= cos(θu[t][k]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] + θu[t][k]/2) - sin(θu[t][k]/2));
     @constraint(subp,angleDiff1[k in fData.brList, t in 2:T],(θ[k[1],t] - fData.σ[k]) - θ[k[2],t] <= θDmaxT[t][k] + 2*pi*(1 - x[k,t]));
     @constraint(subp,angleDiff2[k in fData.brList, t in 2:T],(θ[k[1],t] - fData.σ[k]) - θ[k[2],t] >= θDminT[t][k] - 2*pi*(1 - x[k,t]));
     @constraint(subp,auxConstr5[i in fData.IDList, t in 2:T],tAux5[i,t] == vhat[i,t] - 1/4);
@@ -527,13 +526,13 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
         end
     end
 
-    @constraint(subp,lncConstr1[k in fData.brList],
+    @constraint(subp,lncConstr1[k in fData.brList, t in 2:T],
                 vδ[k[1],t]*vδ[k[2],t]/(fData.τ1[k]*fData.τ2[k])*(wc[k,t]*cos(θϕ[k,t]) + ws[k,t]*sin(θϕ[k,t])) -
                 vmaxT[t][k[2]]/fData.τ2[k]*cos(θδ[k,t])*vδ[k[2],t]/fData.τ2[k]*vhat[k[1],t]/(fData.τ1[k]^2) -
                 vmaxT[t][k[1]]/fData.τ1[k]*cos(θδ[k,t])*vδ[k[1],t]/fData.τ1[k]*vhat[k[2],t]/(fData.τ2[k]^2) >=
                 vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*cos(θδ[k,t])*(vminT[t][k[1]]*vminT[t][k[2]]/(fData.τ1[k]*fData.τ2[k]) -
                 vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])));
-    @constraint(subp,lncConstr2[k in fData.brList],
+    @constraint(subp,lncConstr2[k in fData.brList, t in 2:T],
                 vδ[k[1],t]*vδ[k[2],t]/(fData.τ1[k]*fData.τ2[k])*(wc[k,t]*cos(θϕ[k,t]) + ws[k,t]*sin(θϕ[k,t])) -
                 vminT[t][k[2]]/fData.τ2[k]*cos(θδ[k,t])*vδ[k[2],t]/fData.τ2[k]*vhat[k[1],t]/(fData.τ1[k]^2) -
                 vminT[t][k[1]]/fData.τ1[k]*cos(θδ[k,t])*vδ[k[1],t]/fData.τ1[k]*vhat[k[2],t]/(fData.τ2[k]^2) >=
@@ -583,26 +582,26 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
         (uData[i].DQmin[t] - uData[i].DQ0[t])*u_dm[group_rev[i],t] + uData[i].DQ0[t]);
 
     # h_var constraints: renewable uncertainty
-    @variable(subp, u_hp[i in hList, t in 2:T], Bin);
-    @variable(subp, u_hm[i in hList, t in 2:T], Bin);
-    @variable(subp, 0 <= uz_hp[i in hList, t in 2:T] <= 1);
-    @variable(subp, 0 <= uz_hm[i in hList, t in 2:T] <= 1);
-    @constraint(subp, uncertain_budget_h, sum(u_dp[i,t] + u_dm[i,t] for i in hList for t in 2:T) <= Γ["h"]);
-    @constraint(subp, one_extreme_pt_h[i in hList, t in 2:T],u_hp[i,t] + u_hm[i,t] <= 1);
-    @constraint(subp, uzp_linear1[i in hList, t in 2:T], uz_hp[i,t] <= u_hp[i,t]);
-    @constraint(subp, uzp_linear2[i in hList, t in 2:T], uz_hp[i,t] <= z[i]);
-    @constraint(subp, uzp_linear3[i in hList, t in 2:T], uz_hp[i,t] >= u_hp[i,t] + z[i] - 1);
-    @constraint(subp, uzm_linear1[i in hList, t in 2:T], uz_hm[i,t] <= u_hm[i,t]);
-    @constraint(subp, uzm_linear2[i in hList, t in 2:T], uz_hm[i,t] <= z[i]);
-    @constraint(subp, uzm_linear3[i in hList, t in 2:T], uz_hm[i,t] >= u_hm[i,t] + z[i] - 1);
-    @constraint(subp, hp_cal1[i in fData.IDList, t in 2:T; i in hList], h_var[i,t] == uData[i].RESP0[t]*((1+expansion_factor * z[i]) + 
+    @variable(subp, u_hp[i in hData.hList, t in 2:T], Bin);
+    @variable(subp, u_hm[i in hData.hList, t in 2:T], Bin);
+    @variable(subp, 0 <= uz_hp[i in hData.hList, t in 2:T] <= 1);
+    @variable(subp, 0 <= uz_hm[i in hData.hList, t in 2:T] <= 1);
+    @constraint(subp, uncertain_budget_h, sum(u_dp[i,t] + u_dm[i,t] for i in hData.hList for t in 2:T) <= Γ["h"]);
+    @constraint(subp, one_extreme_pt_h[i in hData.hList, t in 2:T],u_hp[i,t] + u_hm[i,t] <= 1);
+    @constraint(subp, uzp_linear1[i in hData.hList, t in 2:T], uz_hp[i,t] <= u_hp[i,t]);
+    @constraint(subp, uzp_linear2[i in hData.hList, t in 2:T], uz_hp[i,t] <= z[i]);
+    @constraint(subp, uzp_linear3[i in hData.hList, t in 2:T], uz_hp[i,t] >= u_hp[i,t] + z[i] - 1);
+    @constraint(subp, uzm_linear1[i in hData.hList, t in 2:T], uz_hm[i,t] <= u_hm[i,t]);
+    @constraint(subp, uzm_linear2[i in hData.hList, t in 2:T], uz_hm[i,t] <= z[i]);
+    @constraint(subp, uzm_linear3[i in hData.hList, t in 2:T], uz_hm[i,t] >= u_hm[i,t] + z[i] - 1);
+    @constraint(subp, hp_cal1[i in fData.IDList, t in 2:T; i in hData.hList], h_var[i,t] <= uData[i].RESP0[t]*((1+expansion_factor * z[i]) + 
             uData[i].RESPmax*(u_hp[i,t]+expansion_factor*uz_hp[i,t]) - uData[i].RESPmin*(u_hm[i,t]+expansion_factor*uz_hm[i,t])));
-    @constraint(subp, hp_cal2[i in fData.IDList, t in 2:T; !(i in hList)], h_var[i,t] == 0.0);    
+    @constraint(subp, hp_cal2[i in fData.IDList, t in 2:T; !(i in hData.hList)], h_var[i,t] == 0.0);    
 
     # bind the previous solutions
     @constraint(subp,xIni[k in fData.brList, t in 2:T],x[k,t] == xhat[k,t]);
     @constraint(subp,yIni[i in fData.IDList],y[i] == yhat[i]);
-    @constraint(subp,zIni[i in hList],z[i] == zhat[i]);
+    @constraint(subp,zIni[i in hData.hList],z[i] == zhat[i]);
 
     # objective value
     @objective(subp, Min, fData.cz*sum(lpplus[i,t] + lpminus[i,t] + lqplus[i,t] + lqminus[i,t] for i in fData.IDList for t in 2:T) + 
@@ -613,8 +612,6 @@ end
 
 # change the second-stage formulation with updated first-stage solution
 function changeSecond(fData,hData,subp,xhat,yhat,zhat,sphat,sqhat)
-    hList = [i for i in fData.IDList if i in keys(hData)];
-
     for t in 1:T
         if t == 1
             for i in fData.genIDList
@@ -628,7 +625,7 @@ function changeSecond(fData,hData,subp,xhat,yhat,zhat,sphat,sqhat)
             for i in fData.IDList
                 set_normalized_rhs(subp[:yIni][i,t], yhat[i,t]);
             end
-            for i in hList
+            for i in hData.hList
                 set_normalized_rhs(subp[:zIni][i,t], zhat[i,t]);
             end
         end
@@ -637,7 +634,7 @@ function changeSecond(fData,hData,subp,xhat,yhat,zhat,sphat,sqhat)
 end
 
 # append the scenarios to the first-stage problem, given the generated extreme point
-function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
+function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uName)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -646,9 +643,6 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
             θu[t][k] = max(abs(θDmaxT[t][k]),abs(θDminT[t][k]));
         end
     end
-
-    # set of nodes with renewables
-    hList = [i for i in fData.IDList if i in keys(hData)];
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -742,8 +736,8 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
         # set up the variables: active/reactive power injection
         sp = @variable(mp, [i in fData.genIDList, t in 1:T], lower_bound = fData.Pmin[i], upper_bound = fData.Pmax[i]);
         sq = @variable(mp, [i in fData.genIDList, t in 1:T], lower_bound = fData.Qmin[i], upper_bound = fData.Qmax[i]);
-        @constraint(subp, [i in fData.genIDList], sp[i,1] == mp[:sp][i]);
-        @constraint(subp, [i in fData.genIDList], sq[i,1] == mp[:sq][i]);
+        @constraint(mp, [i in fData.genIDList], sp[i,1] == mp[:sp][i]);
+        @constraint(mp, [i in fData.genIDList], sq[i,1] == mp[:sq][i]);
 
         sphatsum = Dict();
         sqhatsum = Dict();
@@ -818,11 +812,11 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
         @constraint(mp,[k in fData.brList, t in 2:T;k[1] < k[2]], cs[k,t] == cs[(k[2],k[1],k[3]),t]);
         @constraint(mp,[k in fData.brList, t in 2:T;k[1] < k[2]], ss[k,t] == -ss[(k[2],k[1],k[3]),t]);
 
-        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] <= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] >= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] <= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] >= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
         @constraint(mp,[k in fData.brList, t in 2:T],p[k,t] == con2Par[k]*ps[k,t]);
-        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] <= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] >= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] <= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] >= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
         @constraint(mp,[k in fData.brList, t in 2:T],q[k,t] == con2Par[k]*qs[k,t]);
         socList1 = Dict();
         socList2 = Dict();
@@ -843,19 +837,19 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
             end
         end
 
-        @constraint(mp,[k in fData.brList, t in 2:T; fData.rateA[k] < Inf],[fData.rateA[k] * x[k,t]; socList1[k,t]] in SecondOrderCone());
+        @constraint(mp,[k in fData.brList, t in 2:T; fData.rateA[k] < Inf],[fData.rateA[k] * mp[:x][k,t]; socList1[k,t]] in SecondOrderCone());
         @constraint(mp,[k in fData.brList, t in 2:T], [(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList2[k,t]] in SecondOrderCone());
         @constraint(mp,[k in fData.brList, t in 2:T],[tAux4[k,t]; socList3[k,t]] in SecondOrderCone());
         @constraint(mp,[i in fData.IDList, t in 2:T],[tAux6[i,t]; socList4[i,t]] in SecondOrderCone());
-        @constraint(mp,[k in fData.brList, t in 2:T],[(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList5[k,t]] in SecondOrderCone);
+        @constraint(mp,[k in fData.brList, t in 2:T],[(vhat[k[1],t]/(fData.τ1[k]^2) + vhat[k[2],t]/(fData.τ2[k]^2))/sqrt(2); socList5[k,t]] in SecondOrderCone());
 
-        @constraint(mp,[k in fData.brList, t in 2:T],sqrt((1-cos(θu[k,t]))/(θu[k,t])^2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t]) == tAux2[k,t]);
+        @constraint(mp,[k in fData.brList, t in 2:T],sqrt((1-cos(θu[t][k]))/(θu[t][k])^2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t]) == tAux2[k,t]);
         @constraint(mp,[k in fData.brList, t in 2:T],cs[k,t] - 3/4 == tAux3[k,t]);
         @constraint(mp,[k in fData.brList, t in 2:T],5/4 - cs[k,t] == tAux4[k,t]);
         @constraint(mp,[k in fData.brList, t in 2:T],
-                    ss[k,t] <= cos(θu[k,t]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] - θu[k,t]/2) + sin(θu[k,t]/2));
+                    ss[k,t] <= cos(θu[t][k]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] - θu[t][k]/2) + sin(θu[t][k]/2));
         @constraint(mp,[k in fData.brList, t in 2:T],
-                    ss[k,t] >= cos(θu[k,t]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] + θu[k,t]/2) - sin(θu[k,t]/2));
+                    ss[k,t] >= cos(θu[t][k]/2)*((θ[k[1],t] - fData.σ[k]) - θ[k[2],t] + θu[t][k]/2) - sin(θu[t][k]/2));
         @constraint(mp,[k in fData.brList, t in 2:T],(θ[k[1],t] - fData.σ[k]) - θ[k[2],t] <= θDmaxT[t][k] + 2*pi*(1 - mp[:x][k,t]));
         @constraint(mp,[k in fData.brList, t in 2:T],(θ[k[1],t] - fData.σ[k]) - θ[k[2],t] >= θDminT[t][k] - 2*pi*(1 - mp[:x][k,t]));
         @constraint(mp,[i in fData.IDList, t in 2:T],tAux5[i,t] == vhat[i,t] - 1/4);
@@ -904,13 +898,13 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
             end
         end
 
-        @constraint(mp,[k in fData.brList],
+        @constraint(mp,[k in fData.brList, t in 2:T],
                     vδ[k[1],t]*vδ[k[2],t]/(fData.τ1[k]*fData.τ2[k])*(wc[k,t]*cos(θϕ[k,t]) + ws[k,t]*sin(θϕ[k,t])) -
                     vmaxT[t][k[2]]/fData.τ2[k]*cos(θδ[k,t])*vδ[k[2],t]/fData.τ2[k]*vhat[k[1],t]/(fData.τ1[k]^2) -
                     vmaxT[t][k[1]]/fData.τ1[k]*cos(θδ[k,t])*vδ[k[1],t]/fData.τ1[k]*vhat[k[2],t]/(fData.τ2[k]^2) >=
                     vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*cos(θδ[k,t])*(vminT[t][k[1]]*vminT[t][k[2]]/(fData.τ1[k]*fData.τ2[k]) -
                     vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])));
-        @constraint(mp,[k in fData.brList],
+        @constraint(mp,[k in fData.brList, t in 2:T],
                     vδ[k[1],t]*vδ[k[2],t]/(fData.τ1[k]*fData.τ2[k])*(wc[k,t]*cos(θϕ[k,t]) + ws[k,t]*sin(θϕ[k,t])) -
                     vminT[t][k[2]]/fData.τ2[k]*cos(θδ[k,t])*vδ[k[2],t]/fData.τ2[k]*vhat[k[1],t]/(fData.τ1[k]^2) -
                     vminT[t][k[1]]/fData.τ1[k]*cos(θδ[k,t])*vδ[k[1],t]/fData.τ1[k]*vhat[k[2],t]/(fData.τ2[k]^2) >=
@@ -922,7 +916,7 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
         eq_var = @variable(mp, [i in fData.IDList, t in 2:T]);
         f_var = @variable(mp, [i in fData.IDList, t in 2:T]);
         I_var = @variable(mp, [i in fData.IDList, t in 1:T], lower_bound = 0);
-        @constraint(mp, [i in fData.IDList, t in 1:T], I_var[i,t] <= mp[:y][i]);
+        @constraint(mp, [i in fData.IDList, t in 1:T], I_var[i,t] <= mp[:y][i] * bData.cap[i]);
         @constraint(mp, [i in fData.IDList, t in 2:T], I_var[i,t] == I_var[i,t-1] - fData.Δt * f_var[i,t]);
         @constraint(mp, [i in fData.IDList, t in 2:T], [bData.uCap[i]^2*mp[:y][i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
         @constraint(mp, [i in fData.IDList, l in 1:length(bData.ηα[i]), t in 2:T], ep_var[i,t] <= bData.ηα[i][l]*f_var[i,t] + bData.ηβ[i][l]);
@@ -930,7 +924,7 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
         # power flow balance
         dp_var = @variable(mp, [i in fData.IDList, t in 2:T]);
         dq_var = @variable(mp, [i in fData.IDList, t in 2:T]);
-        h_var = @variable(mp, [i in fData.IDList, t in 2:T] >= 0);
+        h_var = @variable(mp, [i in fData.IDList, t in 2:T], lower_bound = 0);
         @constraint(mp,[i in fData.IDList, t in 2:T], sum(p[k,t] for k in branchDict1[i]) + vhat[i,t]*fData.gs[i]
                     + lpplus[i,t] - lpminus[i,t] == sphatsum[i,t] + h_var[i,t] - dp_var[i,t] + ep_var[i,t]);
         @constraint(mp,[i in fData.IDList, t in 2:T], sum(q[k,t] for k in branchDict1[i]) - vhat[i,t]*fData.bs[i]
@@ -947,10 +941,10 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
             (uData[i].DQmin[t] - uData[i].DQ0[t])*uList[ω]["u_dm"][group_rev[i],t] + uData[i].DQ0[t]);
 
         # h_var constraints: renewable uncertainty
-        @constraint(mp, hp_cal1[i in fData.IDList, t in 2:T; i in hList], h_var[i,t] == uData[i].RESP0[t]*((1 + expansion_factor*mp[:z][i]) + 
+        @constraint(mp, [i in fData.IDList, t in 2:T; i in hData.hList], h_var[i,t] <= uData[i].RESP0[t]*((1 + expansion_factor*mp[:z][i]) + 
                 uData[i].RESPmax*(uList[ω]["u_hp"][i,t]+expansion_factor*mp[:z][i]*uList[ω]["u_hp"][i,t]) - 
                 uData[i].RESPmin*(uList[ω]["u_hm"][i,t]+expansion_factor*mp[:z][i]*uList[ω]["u_hm"][i,t])));
-        @constraint(mp, hp_cal2[i in fData.IDList, t in 2:T; !(i in hList)], h_var[i,t] == 0.0);    
+        @constraint(mp, [i in fData.IDList, t in 2:T; !(i in hData.hList)], h_var[i,t] == 0.0);    
 
         # objective value
         @constraint(mp, mp[:V] >= fData.cz*sum(lpplus[i,t] + lpminus[i,t] + lqplus[i,t] + lqminus[i,t] for i in fData.IDList for t in 2:T) + 
@@ -960,9 +954,6 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
 end
 
 function solve_first(mp,fData,hData)
-    # set of nodes with renewables
-    hList = [i for i in fData.IDList if i in keys(hData)];
-
     # solve first-stage problem to obtain the solution
     optimize!(mp);
     objhat = objective_value(mp);
@@ -984,14 +975,14 @@ function solve_first(mp,fData,hData)
     for i in fData.IDList
         yhat[i] = value(mp[:y][i]);
     end
-    for i in hList
+    for i in hData.hList
         zhat[i] = value(mp[:z][i]);
     end
 
     return objhat,sphat,sqhat,xhat,yhat,zhat;
 end
 
-function solve_second(subp)
+function solve_second(subp, hData)
     # solve second-stage problem to obtain the solution
     optimize!(subp);
 
@@ -1005,7 +996,7 @@ function solve_second(subp)
             uDict["u_dp"][m,t] = value(subp[:u_dp][m,t]);
             uDict["u_dm"][m,t] = value(subp[:u_dm][m,t]);
         end
-        for i in eachindex(hList)
+        for i in hData.hList
             uDict["u_hp"][i,t] = value(subp[:u_hp][i,t]);
             uDict["u_hm"][i,t] = value(subp[:u_hm][i,t]);
         end

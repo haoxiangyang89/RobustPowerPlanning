@@ -4,3 +4,4 @@ using JuMP, Ipopt, Gurobi, Combinatorics, LinearAlgebra, JLD, HDF5, Distribution
 
 include("def.jl");
 include("readin.jl");
+include("pMod.jl");

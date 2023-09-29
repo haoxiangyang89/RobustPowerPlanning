@@ -5,7 +5,7 @@ addprocs(3);
 
 @everywhere caseList = [14,118]; 
 @everywhere ci = 1;
-@everywhere T = 24;
+@everywhere T = 12;
 
 αmax = [0.128,0.140];
 dαtop = αmax[ci];
@@ -14,12 +14,11 @@ hαtop = 0.2;
 hαbot = 0.2;
 expansion_factor = 0.2;
 
-fData, bData, hData, dData = readInData(ci,caseList);
+fData, bData, hData, dData = readInData(ci,caseList,1e4,1,8);
 uData = makeUAData(fData, hData, dData, T, dαtop, dαbot, hαtop, hαbot);
 groupData = load("../data/groupDict.jld");
 groupDict = groupData["groupDict"];
 Γ = Dict("d" => 10, "h" => 10);
-hList = [i for i in fData.IDList if i in keys(hData)];
 uList = [];
 keepIter = true;
 
@@ -29,20 +28,24 @@ vminT = Dict();
 θDmaxT = Dict();
 θDminT = Dict();
 for t in 1:T
+    vmaxT[t] = Dict();
+    vminT[t] = Dict();
+    θDmaxT[t] = Dict();
+    θDminT[t] = Dict();
     for i in fData.IDList
-        vmax[i,t] = fData.Vmax[i];
-        vmin[i,t] = fData.Vmin[i];
+        vmaxT[t][i] = fData.Vmax[i];
+        vminT[t][i] = fData.Vmin[i];
     end
     for k in fData.brList
-        θDmax[k,t] = pi/6;
-        θDmin[k,t] = -pi/6;
+        θDmaxT[t][k] = pi/6;
+        θDminT[t][k] = -pi/6;
     end
 end
 
 # read the tightened bounds
 
 # create the first-stage model
-mp = createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT);
+mp = createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,3);
 
 # append the all-zero nominal scenario
 uDict = Dict();
@@ -55,7 +58,7 @@ for t in 2:T
         uDict["u_dp"][m,t] = 0;
         uDict["u_dm"][m,t] = 0;
     end
-    for i in eachindex(hList)
+    for i in hData.hList
         uDict["u_hp"][i,t] = 0;
         uDict["u_hm"][i,t] = 0;
     end
@@ -64,7 +67,7 @@ end
 while keepIter
     # append the scenario to the first stage
     push!(uList, uDict);
-    mp = appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,[uDict]);
+    mp = appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,[uDict],[length(uList)]);
 
     # solve the first stage solution to obtain the initial solution
     objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
@@ -73,7 +76,7 @@ while keepIter
     subp = createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat);
 
     # solve the second-stage problem and obtain the worst-case scenario
-    uDict = solve_second(subp);
+    uDict = solve_second(subp,hData);
 
     # tell when to stop: if the scenario has been generated
     if uDict in uList
