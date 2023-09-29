@@ -269,7 +269,7 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
 end
 
 # create the second-stage problem
-function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat)
+function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -280,7 +280,7 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     end
     # scaling issue exists for this primal problem.
     subp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 0, "Threads" => 1));
+        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 30));
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -572,28 +572,40 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
             end
         end
     end
-    @variable(subp, u_dp[m in groupList, t in 2:T], Bin);
-    @variable(subp, u_dm[m in groupList, t in 2:T], Bin);
-    @constraint(subp, uncertain_budget_d, sum(u_dp[m,t] + u_dm[m,t] for m in groupList for t in 2:T) <= Γ["d"]);
-    @constraint(subp, one_extreme_pt_d[m in groupList, t in 2:T],u_dp[m,t] + u_dm[m,t] <= 1);
+    # @variable(subp, u_dp[m in groupList, t in 2:T], Bin);
+    # @variable(subp, u_dm[m in groupList, t in 2:T], Bin);
+    # @constraint(subp, uncertain_budget_d, sum(u_dp[m,t] + u_dm[m,t] for m in groupList for t in 2:T) <= Γ["d"]);
+    # @constraint(subp, one_extreme_pt_d[m in groupList, t in 2:T],u_dp[m,t] + u_dm[m,t] <= 1);
+    u_dp = uDict["u_dp"];
+    u_dm = uDict["u_dm"];
     @constraint(subp, dp_cal[i in fData.IDList, t in 2:T], dp_var[i,t] == (uData[i].DPmax[t] - uData[i].DP0[t])*u_dp[group_rev[i],t] + 
         (uData[i].DPmin[t] - uData[i].DP0[t])*u_dm[group_rev[i],t] + uData[i].DP0[t]);
     @constraint(subp, dq_cal[i in fData.IDList, t in 2:T], dq_var[i,t] == (uData[i].DQmax[t] - uData[i].DQ0[t])*u_dp[group_rev[i],t] + 
         (uData[i].DQmin[t] - uData[i].DQ0[t])*u_dm[group_rev[i],t] + uData[i].DQ0[t]);
 
     # h_var constraints: renewable uncertainty
-    @variable(subp, u_hp[i in hData.hList, t in 2:T], Bin);
-    @variable(subp, u_hm[i in hData.hList, t in 2:T], Bin);
-    @variable(subp, 0 <= uz_hp[i in hData.hList, t in 2:T] <= 1);
-    @variable(subp, 0 <= uz_hm[i in hData.hList, t in 2:T] <= 1);
-    @constraint(subp, uncertain_budget_h, sum(u_dp[i,t] + u_dm[i,t] for i in hData.hList for t in 2:T) <= Γ["h"]);
-    @constraint(subp, one_extreme_pt_h[i in hData.hList, t in 2:T],u_hp[i,t] + u_hm[i,t] <= 1);
-    @constraint(subp, uzp_linear1[i in hData.hList, t in 2:T], uz_hp[i,t] <= u_hp[i,t]);
-    @constraint(subp, uzp_linear2[i in hData.hList, t in 2:T], uz_hp[i,t] <= z[i]);
-    @constraint(subp, uzp_linear3[i in hData.hList, t in 2:T], uz_hp[i,t] >= u_hp[i,t] + z[i] - 1);
-    @constraint(subp, uzm_linear1[i in hData.hList, t in 2:T], uz_hm[i,t] <= u_hm[i,t]);
-    @constraint(subp, uzm_linear2[i in hData.hList, t in 2:T], uz_hm[i,t] <= z[i]);
-    @constraint(subp, uzm_linear3[i in hData.hList, t in 2:T], uz_hm[i,t] >= u_hm[i,t] + z[i] - 1);
+    # @variable(subp, u_hp[i in hData.hList, t in 2:T], Bin);
+    # @variable(subp, u_hm[i in hData.hList, t in 2:T], Bin);
+    # @variable(subp, 0 <= uz_hp[i in hData.hList, t in 2:T] <= 1);
+    # @variable(subp, 0 <= uz_hm[i in hData.hList, t in 2:T] <= 1);
+    # @constraint(subp, uncertain_budget_h, sum(u_hp[i,t] + u_hm[i,t] for i in hData.hList for t in 2:T) <= Γ["h"]);
+    # @constraint(subp, one_extreme_pt_h[i in hData.hList, t in 2:T],u_hp[i,t] + u_hm[i,t] <= 1);
+    # @constraint(subp, uzp_linear1[i in hData.hList, t in 2:T], uz_hp[i,t] <= u_hp[i,t]);
+    # @constraint(subp, uzp_linear2[i in hData.hList, t in 2:T], uz_hp[i,t] <= z[i]);
+    # @constraint(subp, uzp_linear3[i in hData.hList, t in 2:T], uz_hp[i,t] >= u_hp[i,t] + z[i] - 1);
+    # @constraint(subp, uzm_linear1[i in hData.hList, t in 2:T], uz_hm[i,t] <= u_hm[i,t]);
+    # @constraint(subp, uzm_linear2[i in hData.hList, t in 2:T], uz_hm[i,t] <= z[i]);
+    # @constraint(subp, uzm_linear3[i in hData.hList, t in 2:T], uz_hm[i,t] >= u_hm[i,t] + z[i] - 1);
+    u_hp = uDict["u_hp"];
+    u_hm = uDict["u_hm"];
+    uz_hp = Dict();
+    uz_hm = Dict();
+    for i in hData.hList
+        for t in 2:T
+            uz_hp[i,t] = z[i] * u_hp[i,t];
+            uz_hm[i,t] = z[i] * u_hm[i,t];
+        end
+    end
     @constraint(subp, hp_cal1[i in fData.IDList, t in 2:T; i in hData.hList], h_var[i,t] <= uData[i].RESP0[t]*((1+expansion_factor * z[i]) + 
             uData[i].RESPmax*(u_hp[i,t]+expansion_factor*uz_hp[i,t]) - uData[i].RESPmin*(u_hm[i,t]+expansion_factor*uz_hm[i,t])));
     @constraint(subp, hp_cal2[i in fData.IDList, t in 2:T; !(i in hData.hList)], h_var[i,t] == 0.0);    

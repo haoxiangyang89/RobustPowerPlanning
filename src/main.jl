@@ -8,8 +8,8 @@ addprocs(3);
 @everywhere T = 12;
 
 αmax = [0.128,0.140];
-dαtop = αmax[ci];
-dαbot = 0.2*dαtop;
+dαbot = αmax[ci];
+dαtop = 0.2*dαbot;
 hαtop = 0.2;
 hαbot = 0.2;
 expansion_factor = 0.2;
