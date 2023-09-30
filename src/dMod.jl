@@ -255,8 +255,8 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
 
     @constraint(sprob, rhpmCons1[i in hData.hList, t in 2:T], rhpm[i,t] <= fData.cz * u_hm[i,t]);
     @constraint(sprob, rhpmCons2[i in hData.hList, t in 2:T], rhpm[i,t] >= -fData.cz * u_hm[i,t]);
-    @constraint(sprob, rhpmCons3[i in hData.hList, t in 2:T], rhpm[i,t] <= λhm[i,t] + 2 * (1 - u_hm[i,t]) * fData.cz);
-    @constraint(sprob, rhpmCons4[i in hData.hList, t in 2:T], rhpm[i,t] >= λhm[i,t] - 2 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmCons3[i in hData.hList, t in 2:T], rhpm[i,t] <= λhp[i,t] + 2 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmCons4[i in hData.hList, t in 2:T], rhpm[i,t] >= λhp[i,t] - 2 * (1 - u_hm[i,t]) * fData.cz);
 
     @constraint(sprob, rhppzCons11[i in hData.hList, t in 2:T], rhppz1[i,t] <= fData.cz * u_hp[i,t]);
     @constraint(sprob, rhppzCons12[i in hData.hList, t in 2:T], rhppz1[i,t] >= -fData.cz * u_hp[i,t]);
