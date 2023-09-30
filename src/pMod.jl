@@ -50,8 +50,6 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
     # OPF variables
     @variable(mp,p[k in fData.brList]);
     @variable(mp,q[k in fData.brList]);
-    @variable(mp,ps[k in fData.brList]);
-    @variable(mp,qs[k in fData.brList]);
     @variable(mp,vminT[1][i] <= v[i in fData.IDList] <= vmaxT[1][i]);
     @variable(mp,vhat[i in fData.IDList]);
     @variable(mp,θ[i in fData.IDList]);
@@ -142,22 +140,8 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
     @constraint(mp,csEquality[k in fData.brList;k[1] < k[2]], cs[k] == cs[(k[2],k[1],k[3])]);
     @constraint(mp,ssEquality[k in fData.brList;k[1] < k[2]], ss[k] == -ss[(k[2],k[1],k[3])]);
 
-    con1Par = Dict();
-    con2Par = Dict();
-    for k in fData.brList
-        if abs(fData.b[k]) >= 1000
-            con1Par[k] = 1/sqrt(abs(fData.b[k]));
-            con2Par[k] = sqrt(abs(fData.b[k]));
-        else
-            con1Par[k] = 1;
-            con2Par[k] = 1;
-        end
-    end
-
-    @constraint(mp,lineConstrP[k in fData.brList],ps[k] == con1Par[k]*(fData.g[k]*vhat[k[1]]/(fData.τ1[k]^2) - fData.g[k]*wc[k] - fData.b[k]*ws[k]));
-    @constraint(mp,pScale[k in fData.brList],p[k] == con2Par[k]*ps[k]);
-    @constraint(mp,lineConstrQ[k in fData.brList],qs[k] == con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1]]/(fData.τ1[k]^2) + fData.b[k]*wc[k] - fData.g[k]*ws[k]));
-    @constraint(mp,qScale[k in fData.brList],q[k] == con2Par[k]*qs[k]);
+    @constraint(mp,lineConstrP[k in fData.brList],p[k] == (fData.g[k]*vhat[k[1]]/(fData.τ1[k]^2) - fData.g[k]*wc[k] - fData.b[k]*ws[k]));
+    @constraint(mp,lineConstrQ[k in fData.brList],q[k] == ((-fData.b[k] - fData.bc[k]/2)*vhat[k[1]]/(fData.τ1[k]^2) + fData.b[k]*wc[k] - fData.g[k]*ws[k]));
     socList1 = Dict();
     socList2 = Dict();
     socList3 = Dict();
@@ -319,8 +303,6 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     # OPF variables
     @variable(subp,p[k in fData.brList, t in 2:T]);
     @variable(subp,q[k in fData.brList, t in 2:T]);
-    @variable(subp,ps[k in fData.brList, t in 2:T]);
-    @variable(subp,qs[k in fData.brList, t in 2:T]);
     @variable(subp,vminT[t][i] <= v[i in fData.IDList, t in 2:T] <= vmaxT[t][i]);
     @variable(subp,vhat[i in fData.IDList, t in 2:T]);
     @variable(subp,θ[i in fData.IDList, t in 2:T]);
@@ -344,6 +326,9 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     @variable(subp, fData.Qmin[i] <= sq[i in fData.genIDList, t in 1:T] <= fData.Qmax[i]);
     @constraint(subp, spIni[i in fData.genIDList], sp[i,1] == sphat[i]);
     @constraint(subp, sqIni[i in fData.genIDList], sq[i,1] == sqhat[i]);
+    # ramping constraints
+    @constraint(subp,ramp_up[i in fData.genIDList, t in 2:T], sp[i,t] - sp[i,t-1] <= fData.RU[i]);
+    @constraint(subp,ramp_dn[i in fData.genIDList, t in 2:T], sp[i,t] - sp[i,t-1] >= fData.RD[i]);
 
     sphatsum = Dict();
     sqhatsum = Dict();
@@ -352,7 +337,7 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
             sphatsum[i,t] = @expression(subp,0.0);
             if i in keys(fData.LocRev)
                 for j in fData.LocRev[i]
-                sphatsum[i,t] += sp[j,t];
+                    sphatsum[i,t] += sp[j,t];
                 end
             end
         end
@@ -418,18 +403,6 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     @constraint(subp,csEquality[k in fData.brList, t in 2:T;k[1] < k[2]], cs[k,t] == cs[(k[2],k[1],k[3]),t]);
     @constraint(subp,ssEquality[k in fData.brList, t in 2:T;k[1] < k[2]], ss[k,t] == -ss[(k[2],k[1],k[3]),t]);
 
-    con1Par = Dict();
-    con2Par = Dict();
-    for k in fData.brList
-        if abs(fData.b[k]) >= 1000
-            con1Par[k] = 1/sqrt(abs(fData.b[k]));
-            con2Par[k] = sqrt(abs(fData.b[k]));
-        else
-            con1Par[k] = 1;
-            con2Par[k] = 1;
-        end
-    end
-
     M = Dict();
     for k in fData.brList
         if fData.rateA[k] < Inf
@@ -438,12 +411,10 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
             M[k] = 10000;
         end
     end
-    @constraint(subp,lineConstrP1[k in fData.brList, t in 2:T],ps[k,t] <= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
-    @constraint(subp,lineConstrP2[k in fData.brList, t in 2:T],ps[k,t] >= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
-    @constraint(subp,pScale[k in fData.brList, t in 2:T],p[k,t] == con2Par[k]*ps[k,t]);
-    @constraint(subp,lineConstrQ1[k in fData.brList, t in 2:T],qs[k,t] <= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
-    @constraint(subp,lineConstrQ2[k in fData.brList, t in 2:T],qs[k,t] >= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
-    @constraint(subp,qScale[k in fData.brList, t in 2:T],q[k,t] == con2Par[k]*qs[k,t]);
+    @constraint(subp,lineConstrP1[k in fData.brList, t in 2:T],p[k,t] <= (fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
+    @constraint(subp,lineConstrP2[k in fData.brList, t in 2:T],p[k,t] >= (fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
+    @constraint(subp,lineConstrQ1[k in fData.brList, t in 2:T],q[k,t] <= ((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - x[k,t]));
+    @constraint(subp,lineConstrQ2[k in fData.brList, t in 2:T],q[k,t] >= ((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - x[k,t]));
     socList1 = Dict();
     socList2 = Dict();
     socList3 = Dict();
@@ -546,21 +517,17 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     @variable(subp, I_var[i in fData.IDList, t in 1:T] >= 0);
     @constraint(subp, soc_limit[i in fData.IDList, t in 1:T], I_var[i,t] <= y[i]);
     @constraint(subp, soc_trans[i in fData.IDList, t in 2:T], I_var[i,t] == I_var[i,t-1] - fData.Δt * f_var[i,t]);
-    @constraint(subp, bat_out[i in fData.IDList, t in 2:T], [bData.uCap[i]^2*y[i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
-    @constraint(subp, bat_eff[i in fData.IDList, l in 1:length(bData.ηα[i]), t in 2:T], ep_var[i,t] <= bData.ηα[i][l]*f_var[i,t] + bData.ηβ[i][l]);
+    @constraint(subp, bat_out[i in fData.IDList, t in 2:T], [bData.uCap[i]*y[i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
+    @constraint(subp, bat_eff[i in fData.IDList, l in 1:length(bData.ηα[i]), t in 2:T], ep_var[i,t] - bData.ηα[i][l]*f_var[i,t] <= bData.ηβ[i][l]);
 
     # power flow balance
     @variable(subp, dp_var[i in fData.IDList, t in 2:T]);
     @variable(subp, dq_var[i in fData.IDList, t in 2:T]);
     @variable(subp, h_var[i in fData.IDList, t in 2:T] >= 0);
     @constraint(subp,totalP[i in fData.IDList, t in 2:T], sum(p[k,t] for k in branchDict1[i]) + vhat[i,t]*fData.gs[i]
-                + lpplus[i,t] - lpminus[i,t] == sphatsum[i,t] + h_var[i,t] - dp_var[i,t] + ep_var[i,t]);
+                + lpplus[i,t] - lpminus[i,t] - h_var[i,t] + dp_var[i,t] - ep_var[i,t] == sphatsum[i,t]);
     @constraint(subp,totalQ[i in fData.IDList, t in 2:T], sum(q[k,t] for k in branchDict1[i]) - vhat[i,t]*fData.bs[i]
-                + lqplus[i,t] - lqminus[i,t] == sqhatsum[i,t] - dq_var[i,t] + eq_var[i,t]);
-
-    # ramping constraints
-    @constraint(subp,ramp_up[i in fData.genIDList, t in 2:T], sp[i,t] - sp[i,t-1] <= fData.RU[i]);
-    @constraint(subp,ramp_dn[i in fData.genIDList, t in 2:T], sp[i,t] - sp[i,t-1] >= fData.RD[i]);
+                + lqplus[i,t] - lqminus[i,t]  + dq_var[i,t] - eq_var[i,t] == sqhatsum[i,t]);
 
     # d_var constraints: demand uncertainty
     groupList = 1:length(groupDict[2]);
@@ -646,7 +613,7 @@ function changeSecond(fData,hData,subp,xhat,yhat,zhat,sphat,sqhat)
 end
 
 # append the scenarios to the first-stage problem, given the generated extreme point
-function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uName)
+function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -680,19 +647,6 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uNa
             push!(kpDict[(k[1],k[2])],k);
         else
             kpDict[(k[1],k[2])] = [k];
-        end
-    end
-
-    # obtain the scaling factor
-    con1Par = Dict();
-    con2Par = Dict();
-    for k in fData.brList
-        if abs(fData.b[k]) >= 1000
-            con1Par[k] = 1/sqrt(abs(fData.b[k]));
-            con2Par[k] = sqrt(abs(fData.b[k]));
-        else
-            con1Par[k] = 1;
-            con2Par[k] = 1;
         end
     end
 
@@ -730,8 +684,6 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uNa
         # OPF variables
         p = @variable(mp,[k in fData.brList, t in 2:T]);
         q = @variable(mp,[k in fData.brList, t in 2:T]);
-        ps = @variable(mp,[k in fData.brList, t in 2:T]);
-        qs = @variable(mp,[k in fData.brList, t in 2:T]);
         v = @variable(mp,[i in fData.IDList, t in 2:T], lower_bound = vminT[t][i], upper_bound = vmaxT[t][i]);
         vhat = @variable(mp,[i in fData.IDList, t in 2:T]);
         θ = @variable(mp,[i in fData.IDList, t in 2:T]);
@@ -824,12 +776,10 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uNa
         @constraint(mp,[k in fData.brList, t in 2:T;k[1] < k[2]], cs[k,t] == cs[(k[2],k[1],k[3]),t]);
         @constraint(mp,[k in fData.brList, t in 2:T;k[1] < k[2]], ss[k,t] == -ss[(k[2],k[1],k[3]),t]);
 
-        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] <= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],ps[k,t] >= con1Par[k]*(fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],p[k,t] == con2Par[k]*ps[k,t]);
-        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] <= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] >= con1Par[k]*((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
-        @constraint(mp,[k in fData.brList, t in 2:T],q[k,t] == con2Par[k]*qs[k,t]);
+        @constraint(mp,[k in fData.brList, t in 2:T],p[k,t] <= (fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],p[k,t] >= (fData.g[k]*vhat[k[1],t]/(fData.τ1[k]^2) - fData.g[k]*wc[k,t] - fData.b[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] <= ((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) + M[k]*(1 - mp[:x][k,t]));
+        @constraint(mp,[k in fData.brList, t in 2:T],qs[k,t] >= ((-fData.b[k] - fData.bc[k]/2)*vhat[k[1],t]/(fData.τ1[k]^2) + fData.b[k]*wc[k,t] - fData.g[k]*ws[k,t]) - M[k]*(1 - mp[:x][k,t]));
         socList1 = Dict();
         socList2 = Dict();
         socList3 = Dict();
@@ -930,7 +880,7 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList,uNa
         I_var = @variable(mp, [i in fData.IDList, t in 1:T], lower_bound = 0);
         @constraint(mp, [i in fData.IDList, t in 1:T], I_var[i,t] <= mp[:y][i] * bData.cap[i]);
         @constraint(mp, [i in fData.IDList, t in 2:T], I_var[i,t] == I_var[i,t-1] - fData.Δt * f_var[i,t]);
-        @constraint(mp, [i in fData.IDList, t in 2:T], [bData.uCap[i]^2*mp[:y][i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
+        @constraint(mp, [i in fData.IDList, t in 2:T], [bData.uCap[i]*mp[:y][i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
         @constraint(mp, [i in fData.IDList, l in 1:length(bData.ηα[i]), t in 2:T], ep_var[i,t] <= bData.ηα[i][l]*f_var[i,t] + bData.ηβ[i][l]);
 
         # power flow balance

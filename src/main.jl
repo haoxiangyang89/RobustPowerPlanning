@@ -73,7 +73,7 @@ while keepIter
     objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
 
     # feed the first-stage solution to the second stage problem
-    subp = createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat);
+    subp = createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict);
 
     # solve the second-stage problem and obtain the worst-case scenario
     uDict = solve_second(subp,hData);
