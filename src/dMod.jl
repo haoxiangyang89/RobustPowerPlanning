@@ -392,7 +392,7 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
                 -fData.cp[i].params[2]);
     @constraint(sprob, sqConstr[i in fData.genIDList, t in 2:T], λsqu[i,t] + λsql[i,t] - λqi[fData.Loc[i],t] == 0);
     @constraint(sprob, spConstr1[i in fData.genIDList], λspu[i,1] + λspl[i,1] + λspIni[i] - λrampu[i,2] - λrampl[i,2] == 0);
-    @constraint(sprob, sqConstr1[i in fData.genIDList], λsqu[i,t] + λsql[i,t] + λsqIni[i] == 0);
+    @constraint(sprob, sqConstr1[i in fData.genIDList], λsqu[i,1] + λsql[i,1] + λsqIni[i] == 0);
     @constraint(sprob, spConstrT[i in fData.genIDList], λspu[i,T] + λspl[i,T] + λrampu[i,T] + λrampl[i,T] - λpi[fData.Loc[i],T] == -fData.cp[i].params[2]);
 
     # set up the objective function
