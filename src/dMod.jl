@@ -383,7 +383,7 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
                  - fData.rateA[k] * ν1[k,t] + (λθ1[k,t] - λθ2[k,t])*2*pi + λxIni[k,t] == 0);
     @constraint(sprob, xConstr2[k in fData.brList, t in 2:T; fData.rateA[k] == Inf], M[k] * (λptrans1[k,t] - λptrans2[k,t] + λqtrans1[k,t] - λqtrans2[k,t])
                  + (λθ1[k,t] - λθ2[k,t])*2*pi + λxIni[k,t] == 0);
-    @constraint(sprob, yConstr[i in fData.IDList], -sum(λbat_lim[i,t] for t in 1:T) - νbat_out[i,t]*bData.uCap[i] + λyIni[i] == 0);
+    @constraint(sprob, yConstr[i in fData.IDList], -sum(λbat_lim[i,t] + νbat_out[i,t]*bData.uCap[i] for t in 2:T) - λbat_lim[i,1] + λyIni[i] == 0);
     @constraint(sprob, zConstr[i in hData.hList], sum(-λhzp2[i,t] - λhzp3[i,t] - λhzm2[i,t] - λhzm3[i,t] for t in 2:T) + λzIni[i] - 
                 λhp[i,t] * uData[i].RESP0[t] * expansion_factor == 0);
 
