@@ -367,7 +367,7 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     @constraint(sprob, ep_varConstr[i in fData.IDList, t in 2:T], -μbat_out[i,1,t] + sum(λbat_eff[i,l,t] for l in 1:length(bData.ηα[i])) - λpi[i,t] == 0);
     @constraint(sprob, eq_varConstr[i in fData.IDList, t in 2:T], -μbat_out[i,2,t] - λqi[i,t] == 0);
     @constraint(sprob, f_varConstr[i in fData.IDList, t in 2:T], fData.Δt * λbat_trans[i,t] - sum(bData.ηα[i][l] * λbat_eff[i,l,t] for l in 1:length(bData.ηα[i])) == 0);
-    @constraint(sprob, I_varConstr[i in fData.IDList, t in 2:(T-1)], λbat_lim[i,t] + λbat_trans[i,t] - λ_bat_trans[i,t+1] == 0);
+    @constraint(sprob, I_varConstr[i in fData.IDList, t in 2:(T-1)], λbat_lim[i,t] + λbat_trans[i,t] - λbat_trans[i,t+1] == 0);
     @constraint(sprob, I_varConstrT[i in fData.IDList], λbat_lim[i,T] + λbat_trans[i,T] == 0);
     @constraint(sprob, I_varConstr1[i in fData.IDList], λbat_lim[i,1] - λbat_trans[i,2] == 0);
 
