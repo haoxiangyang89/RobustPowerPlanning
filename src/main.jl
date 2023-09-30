@@ -67,7 +67,7 @@ end
 while keepIter
     # append the scenario to the first stage
     push!(uList, uDict);
-    mp = appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,[uDict],[length(uList)]);
+    mp = appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,[uDict]);
 
     # solve the first stage solution to obtain the initial solution
     objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
