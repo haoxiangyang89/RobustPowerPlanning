@@ -515,7 +515,7 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
     @variable(subp, eq_var[i in fData.IDList, t in 2:T]);
     @variable(subp, f_var[i in fData.IDList, t in 2:T]);
     @variable(subp, I_var[i in fData.IDList, t in 1:T] >= 0);
-    @constraint(subp, soc_limit[i in fData.IDList, t in 1:T], I_var[i,t] <= y[i]);
+    @constraint(subp, soc_limit[i in fData.IDList, t in 1:T], I_var[i,t] <= bData.cap[i]*y[i]);
     @constraint(subp, soc_trans[i in fData.IDList, t in 2:T], I_var[i,t] == I_var[i,t-1] - fData.Δt * f_var[i,t]);
     @constraint(subp, bat_out[i in fData.IDList, t in 2:T], [bData.uCap[i]*y[i]; [ep_var[i,t], eq_var[i,t]]] in SecondOrderCone());
     @constraint(subp, bat_eff[i in fData.IDList, l in 1:length(bData.ηα[i]), t in 2:T], ep_var[i,t] - bData.ηα[i][l]*f_var[i,t] <= bData.ηβ[i][l]);

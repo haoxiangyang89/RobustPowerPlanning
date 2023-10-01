@@ -70,9 +70,9 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     M = Dict();
     for k in fData.brList
         if fData.rateA[k] < Inf
-            M[k] = fData.rateA[k]^2;
+            M[k] = fData.rateA[k]*2;
         else
-            M[k] = 10000;
+            M[k] = 100;
         end
     end
 
@@ -210,10 +210,10 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     @variable(sprob, u_hm[i in hData.hList, t in 2:T], Bin);
     @variable(sprob, rhpp[i in hData.hList, t in 2:T]);
     @variable(sprob, rhpm[i in hData.hList, t in 2:T]);
-    @variable(sprob, rhppz1[i in hData.hList, t in 2:T] >= 0);
-    @variable(sprob, rhppz2[i in hData.hList, t in 2:T] <= 0);
-    @variable(sprob, rhpmz1[i in hData.hList, t in 2:T] >= 0);
-    @variable(sprob, rhpmz2[i in hData.hList, t in 2:T] <= 0);
+    @variable(sprob, rhppz1[i in hData.hList, t in 2:T]);
+    @variable(sprob, rhppz2[i in hData.hList, t in 2:T]);
+    @variable(sprob, rhpmz1[i in hData.hList, t in 2:T]);
+    @variable(sprob, rhpmz2[i in hData.hList, t in 2:T]);
 
     # dual variables for non-anticipitavity constraints
     @variable(sprob, λxIni[k in fData.brList, t in 2:T]);
@@ -230,53 +230,53 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     # linearizing the bilinear terms
     @constraint(sprob, rdppCons1[i in fData.IDList, t in 2:T], rdpp[i,t] <= fData.cz * u_dp[group_rev[i],t]);
     @constraint(sprob, rdppCons2[i in fData.IDList, t in 2:T], rdpp[i,t] >= -fData.cz * u_dp[group_rev[i],t]);
-    @constraint(sprob, rdppCons3[i in fData.IDList, t in 2:T], rdpp[i,t] <= λdp[i,t] + 2 * (1 - u_dp[group_rev[i],t]) * fData.cz);
-    @constraint(sprob, rdppCons4[i in fData.IDList, t in 2:T], rdpp[i,t] >= λdp[i,t] - 2 * (1 - u_dp[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdppCons3[i in fData.IDList, t in 2:T], rdpp[i,t] <= λdp[i,t] + 5 * (1 - u_dp[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdppCons4[i in fData.IDList, t in 2:T], rdpp[i,t] >= λdp[i,t] - 5 * (1 - u_dp[group_rev[i],t]) * fData.cz);
 
     @constraint(sprob, rdpmCons1[i in fData.IDList, t in 2:T], rdpm[i,t] <= fData.cz * u_dm[group_rev[i],t]);
     @constraint(sprob, rdpmCons2[i in fData.IDList, t in 2:T], rdpm[i,t] >= -fData.cz * u_dm[group_rev[i],t]);
-    @constraint(sprob, rdpmCons3[i in fData.IDList, t in 2:T], rdpm[i,t] <= λdp[i,t] + 2 * (1 - u_dm[group_rev[i],t]) * fData.cz);
-    @constraint(sprob, rdpmCons4[i in fData.IDList, t in 2:T], rdpm[i,t] >= λdp[i,t] - 2 * (1 - u_dm[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdpmCons3[i in fData.IDList, t in 2:T], rdpm[i,t] <= λdp[i,t] + 5 * (1 - u_dm[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdpmCons4[i in fData.IDList, t in 2:T], rdpm[i,t] >= λdp[i,t] - 5 * (1 - u_dm[group_rev[i],t]) * fData.cz);
 
     @constraint(sprob, rdqpCons1[i in fData.IDList, t in 2:T], rdqp[i,t] <= fData.cz * u_dp[group_rev[i],t]);
     @constraint(sprob, rdqpCons2[i in fData.IDList, t in 2:T], rdqp[i,t] >= -fData.cz * u_dp[group_rev[i],t]);
-    @constraint(sprob, rdqpCons3[i in fData.IDList, t in 2:T], rdqp[i,t] <= λdq[i,t] + 2 * (1 - u_dp[group_rev[i],t]) * fData.cz);
-    @constraint(sprob, rdqpCons4[i in fData.IDList, t in 2:T], rdqp[i,t] >= λdq[i,t] - 2 * (1 - u_dp[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdqpCons3[i in fData.IDList, t in 2:T], rdqp[i,t] <= λdq[i,t] + 5 * (1 - u_dp[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdqpCons4[i in fData.IDList, t in 2:T], rdqp[i,t] >= λdq[i,t] - 5 * (1 - u_dp[group_rev[i],t]) * fData.cz);
 
-    @constraint(sprob, rdqmCons1[i in fData.IDList, t in 2:T], rdqm[i,t] <= fData.cz * u_dp[group_rev[i],t]);
-    @constraint(sprob, rdqmCons2[i in fData.IDList, t in 2:T], rdqm[i,t] >= -fData.cz * u_dp[group_rev[i],t]);
-    @constraint(sprob, rdqmCons3[i in fData.IDList, t in 2:T], rdqm[i,t] <= λdq[i,t] + 2 * (1 - u_dm[group_rev[i],t]) * fData.cz);
-    @constraint(sprob, rdqmCons4[i in fData.IDList, t in 2:T], rdqm[i,t] >= λdq[i,t] - 2 * (1 - u_dm[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdqmCons1[i in fData.IDList, t in 2:T], rdqm[i,t] <= fData.cz * u_dm[group_rev[i],t]);
+    @constraint(sprob, rdqmCons2[i in fData.IDList, t in 2:T], rdqm[i,t] >= -fData.cz * u_dm[group_rev[i],t]);
+    @constraint(sprob, rdqmCons3[i in fData.IDList, t in 2:T], rdqm[i,t] <= λdq[i,t] + 5 * (1 - u_dm[group_rev[i],t]) * fData.cz);
+    @constraint(sprob, rdqmCons4[i in fData.IDList, t in 2:T], rdqm[i,t] >= λdq[i,t] - 5 * (1 - u_dm[group_rev[i],t]) * fData.cz);
 
     @constraint(sprob, rhppCons1[i in hData.hList, t in 2:T], rhpp[i,t] <= fData.cz * u_hp[i,t]);
     @constraint(sprob, rhppCons2[i in hData.hList, t in 2:T], rhpp[i,t] >= -fData.cz * u_hp[i,t]);
-    @constraint(sprob, rhppCons3[i in hData.hList, t in 2:T], rhpp[i,t] <= λhp[i,t] + 2 * (1 - u_hp[i,t]) * fData.cz);
-    @constraint(sprob, rhppCons4[i in hData.hList, t in 2:T], rhpp[i,t] >= λhp[i,t] - 2 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppCons3[i in hData.hList, t in 2:T], rhpp[i,t] <= λhp[i,t] + 5 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppCons4[i in hData.hList, t in 2:T], rhpp[i,t] >= λhp[i,t] - 5 * (1 - u_hp[i,t]) * fData.cz);
 
     @constraint(sprob, rhpmCons1[i in hData.hList, t in 2:T], rhpm[i,t] <= fData.cz * u_hm[i,t]);
     @constraint(sprob, rhpmCons2[i in hData.hList, t in 2:T], rhpm[i,t] >= -fData.cz * u_hm[i,t]);
-    @constraint(sprob, rhpmCons3[i in hData.hList, t in 2:T], rhpm[i,t] <= λhp[i,t] + 2 * (1 - u_hm[i,t]) * fData.cz);
-    @constraint(sprob, rhpmCons4[i in hData.hList, t in 2:T], rhpm[i,t] >= λhp[i,t] - 2 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmCons3[i in hData.hList, t in 2:T], rhpm[i,t] <= λhp[i,t] + 5 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmCons4[i in hData.hList, t in 2:T], rhpm[i,t] >= λhp[i,t] - 5 * (1 - u_hm[i,t]) * fData.cz);
 
     @constraint(sprob, rhppzCons11[i in hData.hList, t in 2:T], rhppz1[i,t] <= fData.cz * u_hp[i,t]);
     @constraint(sprob, rhppzCons12[i in hData.hList, t in 2:T], rhppz1[i,t] >= -fData.cz * u_hp[i,t]);
-    @constraint(sprob, rhppzCons13[i in hData.hList, t in 2:T], rhppz1[i,t] <= λhzp1[i,t] + 2 * (1 - u_hp[i,t]) * fData.cz);
-    @constraint(sprob, rhppzCons14[i in hData.hList, t in 2:T], rhppz1[i,t] >= λhzp1[i,t] - 2 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppzCons13[i in hData.hList, t in 2:T], rhppz1[i,t] <= λhzp1[i,t] + 5 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppzCons14[i in hData.hList, t in 2:T], rhppz1[i,t] >= λhzp1[i,t] - 5 * (1 - u_hp[i,t]) * fData.cz);
 
     @constraint(sprob, rhpmzCons11[i in hData.hList, t in 2:T], rhpmz1[i,t] <= fData.cz * u_hm[i,t]);
     @constraint(sprob, rhpmzCons12[i in hData.hList, t in 2:T], rhpmz1[i,t] >= -fData.cz * u_hm[i,t]);
-    @constraint(sprob, rhpmzCons13[i in hData.hList, t in 2:T], rhpmz1[i,t] <= λhzm1[i,t] + 2 * (1 - u_hm[i,t]) * fData.cz);
-    @constraint(sprob, rhpmzCons14[i in hData.hList, t in 2:T], rhpmz1[i,t] >= λhzm1[i,t] - 2 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmzCons13[i in hData.hList, t in 2:T], rhpmz1[i,t] <= λhzm1[i,t] + 5 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmzCons14[i in hData.hList, t in 2:T], rhpmz1[i,t] >= λhzm1[i,t] - 5 * (1 - u_hm[i,t]) * fData.cz);
 
     @constraint(sprob, rhppzCons21[i in hData.hList, t in 2:T], rhppz2[i,t] <= fData.cz * u_hp[i,t]);
     @constraint(sprob, rhppzCons22[i in hData.hList, t in 2:T], rhppz2[i,t] >= -fData.cz * u_hp[i,t]);
-    @constraint(sprob, rhppzCons23[i in hData.hList, t in 2:T], rhppz2[i,t] <= λhzp3[i,t] + 2 * (1 - u_hp[i,t]) * fData.cz);
-    @constraint(sprob, rhppzCons24[i in hData.hList, t in 2:T], rhppz2[i,t] >= λhzp3[i,t] - 2 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppzCons23[i in hData.hList, t in 2:T], rhppz2[i,t] <= λhzp3[i,t] + 5 * (1 - u_hp[i,t]) * fData.cz);
+    @constraint(sprob, rhppzCons24[i in hData.hList, t in 2:T], rhppz2[i,t] >= λhzp3[i,t] - 5 * (1 - u_hp[i,t]) * fData.cz);
 
     @constraint(sprob, rhpmzCons21[i in hData.hList, t in 2:T], rhpmz2[i,t] <= fData.cz * u_hm[i,t]);
     @constraint(sprob, rhpmzCons22[i in hData.hList, t in 2:T], rhpmz2[i,t] >= -fData.cz * u_hm[i,t]);
-    @constraint(sprob, rhpmzCons23[i in hData.hList, t in 2:T], rhpmz2[i,t] <= λhzm3[i,t] + 2 * (1 - u_hm[i,t]) * fData.cz);
-    @constraint(sprob, rhpmzCons24[i in hData.hList, t in 2:T], rhpmz2[i,t] >= λhzm3[i,t] - 2 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmzCons23[i in hData.hList, t in 2:T], rhpmz2[i,t] <= λhzm3[i,t] + 5 * (1 - u_hm[i,t]) * fData.cz);
+    @constraint(sprob, rhpmzCons24[i in hData.hList, t in 2:T], rhpmz2[i,t] >= λhzm3[i,t] - 5 * (1 - u_hm[i,t]) * fData.cz);
 
     # set up the SOC constraints
     for t in 2:T
@@ -367,23 +367,23 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     @constraint(sprob, ep_varConstr[i in fData.IDList, t in 2:T], -μbat_out[i,1,t] + sum(λbat_eff[i,l,t] for l in 1:length(bData.ηα[i])) - λpi[i,t] == 0);
     @constraint(sprob, eq_varConstr[i in fData.IDList, t in 2:T], -μbat_out[i,2,t] - λqi[i,t] == 0);
     @constraint(sprob, f_varConstr[i in fData.IDList, t in 2:T], fData.Δt * λbat_trans[i,t] - sum(bData.ηα[i][l] * λbat_eff[i,l,t] for l in 1:length(bData.ηα[i])) == 0);
-    @constraint(sprob, I_varConstr[i in fData.IDList, t in 2:(T-1)], λbat_lim[i,t] + λbat_trans[i,t] - λbat_trans[i,t+1] == 0);
-    @constraint(sprob, I_varConstrT[i in fData.IDList], λbat_lim[i,T] + λbat_trans[i,T] == 0);
-    @constraint(sprob, I_varConstr1[i in fData.IDList], λbat_lim[i,1] - λbat_trans[i,2] == 0);
+    @constraint(sprob, I_varConstr[i in fData.IDList, t in 2:(T-1)], λbat_lim[i,t] + λbat_trans[i,t] - λbat_trans[i,t+1] >= 0);
+    @constraint(sprob, I_varConstrT[i in fData.IDList], λbat_lim[i,T] + λbat_trans[i,T] >= 0);
+    @constraint(sprob, I_varConstr1[i in fData.IDList], λbat_lim[i,1] - λbat_trans[i,2] >= 0);
 
     # set up constraints for demand/renewable variables
     @constraint(sprob, dp_varConstr[i in fData.IDList, t in 2:T], λpi[i,t] + λdp[i,t] == 0);
     @constraint(sprob, dq_varConstr[i in fData.IDList, t in 2:T], λqi[i,t] + λdq[i,t] == 0);
     @constraint(sprob, h_varConstr[i in fData.IDList, t in 2:T], -λpi[i,t] + λhp[i,t] >= 0);
-    @constraint(sprob, uzhpConstr[i in hData.hList, t in 2:T], λhzp1[i,t] + λhzp2[i,t] + λhzp3[i,t] - expansion_factor * uData[i].RESPmax * λhp[i,t] >= 0);
-    @constraint(sprob, uzhmConstr[i in hData.hList, t in 2:T], λhzm1[i,t] + λhzm2[i,t] + λhzm3[i,t] + expansion_factor * uData[i].RESPmin * λhp[i,t] >= 0);
+    @constraint(sprob, uzhpConstr[i in hData.hList, t in 2:T], λhzp1[i,t] + λhzp2[i,t] + λhzp3[i,t] - uData[i].RESP0[t] * expansion_factor * uData[i].RESPmax * λhp[i,t] >= 0);
+    @constraint(sprob, uzhmConstr[i in hData.hList, t in 2:T], λhzm1[i,t] + λhzm2[i,t] + λhzm3[i,t] + uData[i].RESP0[t] * expansion_factor * uData[i].RESPmin * λhp[i,t] >= 0);
 
     # set up constraints for x/y/z
     @constraint(sprob, xConstr1[k in fData.brList, t in 2:T; fData.rateA[k] < Inf], M[k] * (λptrans1[k,t] - λptrans2[k,t] + λqtrans1[k,t] - λqtrans2[k,t])
                  - fData.rateA[k] * ν1[k,t] + (λθ1[k,t] - λθ2[k,t])*2*pi + λxIni[k,t] == 0);
     @constraint(sprob, xConstr2[k in fData.brList, t in 2:T; fData.rateA[k] == Inf], M[k] * (λptrans1[k,t] - λptrans2[k,t] + λqtrans1[k,t] - λqtrans2[k,t])
                  + (λθ1[k,t] - λθ2[k,t])*2*pi + λxIni[k,t] == 0);
-    @constraint(sprob, yConstr[i in fData.IDList], -sum(λbat_lim[i,t] + νbat_out[i,t]*bData.uCap[i] for t in 2:T) - λbat_lim[i,1] + λyIni[i] == 0);
+    @constraint(sprob, yConstr[i in fData.IDList], -sum(bData.cap[i]*λbat_lim[i,t] + νbat_out[i,t]*bData.uCap[i] for t in 2:T) - bData.cap[i]*λbat_lim[i,1] + λyIni[i] == 0);
     @constraint(sprob, zConstr[i in hData.hList], -sum(λhzp2[i,t] + λhzp3[i,t] + λhzm2[i,t] + λhzm3[i,t] + λhp[i,t] * uData[i].RESP0[t] * expansion_factor for t in 2:T)
                  + λzIni[i] == 0);
 
@@ -396,14 +396,15 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
     @constraint(sprob, spConstrT[i in fData.genIDList], λspu[i,T] + λspl[i,T] + λrampu[i,T] + λrampl[i,T] - λpi[fData.Loc[i],T] == -fData.cp[i].params[2]);
 
     # set up the objective function
-    @objective(sprob, Max, -sum(sum(μ4[i,2,t]/4 + ν4[i,t]/4 + λvu[i,t]*vmaxT[t][i] + λvl[i,t]*vminT[t][i] - vmaxT[t][i]*vminT[t][i]*λv[i,t] 
+    @objective(sprob, Max, -sum(sum(-μ4[i,2,t]/4 + ν4[i,t]/4 + λvu[i,t]*vmaxT[t][i] + λvl[i,t]*vminT[t][i] - vmaxT[t][i]*vminT[t][i]*λv[i,t] 
         + sum(bData.ηβ[i][l] * λbat_eff[i,l,t] for l in 1:length(bData.ηα[i])) + λdp[i,t]*uData[i].DP0[t] + λdq[i,t]*uData[i].DQ0[t]
         + (uData[i].DPmax[t] - uData[i].DP0[t])*rdpp[i,t] + (uData[i].DPmin[t] - uData[i].DP0[t])*rdpm[i,t] 
         + (uData[i].DQmax[t] - uData[i].DQ0[t])*rdqp[i,t] + (uData[i].DQmin[t] - uData[i].DQ0[t])*rdqm[i,t] 
             for t in 2:T) + yhat[i]*λyIni[i] for i in fData.IDList) - 
         sum(sum(fData.Pmax[i] * λspu[i,t] + fData.Pmin[i] * λspl[i,t] + fData.Qmax[i] * λsqu[i,t] + fData.Qmin[i] * λsql[i,t] 
-        + λrampu[i,t] * fData.RU[i] + λrampl[i,t] * fData.RD[i]
-            for t in 2:T) + sphat[i] * λspIni[i] + sqhat[i] * λsqIni[i] for i in fData.genIDList) -
+        + λrampu[i,t] * fData.RU[i] + λrampl[i,t] * fData.RD[i] for t in 2:T)
+        + fData.Pmax[i] * λspu[i,1] + fData.Pmin[i] * λspl[i,1] + fData.Qmax[i] * λsqu[i,1] + fData.Qmin[i] * λsql[i,1] 
+        + sphat[i] * λspIni[i] + sqhat[i] * λsqIni[i] for i in fData.genIDList) -
         sum(-3/4*μ3[k,2,t] + 5/4*ν3[k,t] + csmax[k,t]*λcs1[k,t] + csmin[k,t]*λcs2[k,t] + (cos(θDminT[t][k]) - csConst[k,t]*(fData.σ[k]+θDminT[t][k]))*λcs3[k,t]
         + (sin(θu[t][k]/2) - θu[t][k]/2*cos(θu[t][k]/2))*(λss4[k,t] - λss5[k,t]) + ssmax[k,t]*λss1[k,t] + ssmin[k,t]*λss2[k,t]
         + (θDmaxT[t][k] + fData.σ[k] + 2*pi)*λθ1[k,t] + (θDminT[t][k] + fData.σ[k] - 2*pi)*λθ2[k,t] - fData.σ[k]*(λss4[k,t] + λss5[k,t])
@@ -417,9 +418,27 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
         - ssmin[k,t]*vminT[t][k[1]]*vminT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*λws1[k,t] - ssmax[k,t]*vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*λws2[k,t]
         - ssmax[k,t]*vminT[t][k[1]]*vminT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*λws3[k,t] - ssmin[k,t]*vmaxT[t][k[1]]*vmaxT[t][k[2]]/(fData.τ1[k]*fData.τ2[k])*λws4[k,t]
            for t in 2:T for k in fData.brList) - 
-        sum(sum(λhp[i,t]*uData[i].RESP0[t] - λhzp3[i,t] - λhzm3[i,t] + rhpp[i,t]*uData[i].RESPmax - rhpm[i,t]*uData[i].RESPmin
+        sum(sum(λhp[i,t]*uData[i].RESP0[t] - λhzp3[i,t] - λhzm3[i,t] + rhpp[i,t]*uData[i].RESPmax*uData[i].RESP0[t] - rhpm[i,t]*uData[i].RESPmin*uData[i].RESP0[t]
         + rhppz1[i,t] + rhppz2[i,t] + rhpmz1[i,t] + rhpmz2[i,t] for t in 2:T) + zhat[i]*λzIni[i] for i in hData.hList)
             );
 
     return sprob;
+end
+
+function dual_master(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat)
+    # obtain the master problem for the dual
+    dp_m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
+        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 1));
+    
+    @variable(dp_m, u_hp[i in hData.hList, t in 2:T], Bin);
+    @variable(dp_m, u_hm[i in hData.hList, t in 2:T], Bin);
+    @variable(dp_m, u_dp[m in groupList, t in 2:T], Bin);
+    @variable(dp_m, u_dm[m in groupList, t in 2:T], Bin);
+
+    @constraint(dp_m, uncertain_budget_d, sum(u_dp[m,t] + u_dm[m,t] for m in groupList for t in 2:T) <= Γ["d"]);
+    @constraint(dp_m, one_extreme_pt_d[m in groupList, t in 2:T], u_dp[m,t] + u_dm[m,t] <= 1);
+    @constraint(dp_m, uncertain_budget_h, sum(u_hp[i,t] + u_hm[i,t] for i in hData.hList for t in 2:T) <= Γ["h"]);
+    @constraint(dp_m, one_extreme_pt_h[i in hData.hList, t in 2:T], u_hp[i,t] + u_hm[i,t] <= 1);
+
+    
 end
