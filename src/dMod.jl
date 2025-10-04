@@ -1,5 +1,5 @@
 # create the dual formulation of the inner min of the min-max-min problem
-function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat)
+function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads = 1)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -9,8 +9,8 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
         end
     end
     # scaling issue exists for this primal problem.
-    sprob = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 30));
+    # "NumericFocus" => 0, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6, "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6,
+    sprob = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 1, "Threads" => no_threads,"TimeLimit" => 300));
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -428,7 +428,7 @@ end
 function dual_master(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat)
     # obtain the master problem for the dual
     dp_m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 1));
+        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 0, "Threads" => 1));
     
     @variable(dp_m, u_hp[i in hData.hList, t in 2:T], Bin);
     @variable(dp_m, u_hm[i in hData.hList, t in 2:T], Bin);
