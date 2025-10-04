@@ -440,5 +440,5 @@ function dual_master(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vmi
     @constraint(dp_m, uncertain_budget_h, sum(u_hp[i,t] + u_hm[i,t] for i in hData.hList for t in 2:T) <= Γ["h"]);
     @constraint(dp_m, one_extreme_pt_h[i in hData.hList, t in 2:T], u_hp[i,t] + u_hm[i,t] <= 1);
 
-    
+    return dp_m;
 end
