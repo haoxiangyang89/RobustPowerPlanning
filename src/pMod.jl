@@ -1,5 +1,5 @@
 # create the first stage problem
-function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
+function createFirst(fData,uData,hData,bData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit,no_threads = 1)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -9,8 +9,7 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
         end
     end
     # scaling issue exists for this primal problem.
-    mp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 1));
+    mp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 1, "Threads" => no_threads));
     set_string_names_on_creation(mp, false);
 
     # obtain the pairs that are connected
@@ -253,7 +252,7 @@ function createFirst(fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit)
 end
 
 # create the second-stage problem
-function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict)
+function createSecond(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -263,8 +262,7 @@ function createSecond(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vm
         end
     end
     # scaling issue exists for this primal problem.
-    subp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "NumericFocus" => 3, "BarConvTol" => 1e-6, "MIPGap" => 1e-6, "BarQCPConvTol" => 1e-6,
-        "OptimalityTol" => 1e-6, "IntFeasTol" => 1e-6, "FeasibilityTol" => 1e-6, "OutputFlag" => 1, "Threads" => 30));
+    subp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 0, "Threads" => 1));
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -613,7 +611,7 @@ function changeSecond(fData,hData,subp,xhat,yhat,zhat,sphat,sqhat)
 end
 
 # append the scenarios to the first-stage problem, given the generated extreme point
-function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
+function appendScen(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -654,7 +652,7 @@ function appendScen(mp,fData,uData,hData,T,vmaxT,vminT,θDmaxT,θDminT,uList)
     M = Dict();
     for k in fData.brList
         if fData.rateA[k] < Inf
-            M[k] = fData.rateA[k]^2;
+            M[k] = fData.rateA[k] * 10;
         else
             M[k] = 10000;
         end
@@ -947,6 +945,7 @@ end
 function solve_second(subp, hData)
     # solve second-stage problem to obtain the solution
     optimize!(subp);
+    subp_obj = objective_value(subp);
 
     uDict = Dict();
     uDict["u_dp"] = Dict();
@@ -963,5 +962,5 @@ function solve_second(subp, hData)
             uDict["u_hm"][i,t] = value(subp[:u_hm][i,t]);
         end
     end
-    return uDict;
+    return uDict, subp_obj;
 end
