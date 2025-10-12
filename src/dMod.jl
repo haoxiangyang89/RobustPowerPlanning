@@ -1,5 +1,5 @@
 # create the dual formulation of the inner min of the min-max-min problem
-function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads = 1)
+function createSecond_dual(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads = 1)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -426,7 +426,7 @@ function createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vma
 end
 
 # given an uncertainty realization, solve the subproblem to get the scenario cost
-function testSecond_dual(fData,uData,hData,T,groupDict,uhat,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads = 1)
+function testSecond_dual(fData,uData,hData,bData,T,groupDict,uhat,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads = 1)
     # first-stage model without any scenarios
     θu = Dict();
     for t in 1:T
@@ -911,7 +911,7 @@ function obtain_dual(sprob,fData,hData,T,groupDict)
     return u_hp_coeff, u_hm_coeff, u_dp_coeff, u_dm_coeff;
 end
 
-function dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat)
+function dual_sub_uhat(fData,uData,hData,bData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat)
     groupList = 1:length(groupDict[2]);
     group_rev = Dict();
     for i in fData.IDList
@@ -931,8 +931,8 @@ function dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vmin
         end
     end
     # scaling issue exists for this primal problem.
-    subd = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 0, "Threads" => 1));
-    # subd = Model(COPT.Optimizer);
+    # subd = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 0, "Threads" => 1));
+    subd = Model(optimizer_with_attributes(COPT.Optimizer, "Logging" => 0));
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -1304,9 +1304,9 @@ function dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vmin
     return subd;
 end
 
-function solve_dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat)
+function solve_dual_sub_uhat(fData,uData,hData,bData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat)
     # construct and solve the dual subproblem to suit the parallelization
-    subd = dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat);
+    subd = dual_sub_uhat(fData,uData,hData,bData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uhat);
     optimize!(subd);
 
     x_coeff = shadow_price.(subd[:xIni]);

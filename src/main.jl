@@ -38,7 +38,7 @@ function solve_process(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT, θD
         # feed the first-stage solution to the second stage problem
         # subp = createSecond(fData,uData,hData,T,groupDict[ci],Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict);
         tSecond_start = time();
-        subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
+        subp_dual = createSecond_dual(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
 
         # solve the second-stage problem and obtain the worst-case scenario
         uDict, subp_obj = solve_second(subp_dual, hData, groupDict);
@@ -103,7 +103,7 @@ function solve_process_para(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT
         # feed the first-stage solution to the second stage problem
         # subp = createSecond(fData,uData,hData,T,groupDict[ci],Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict);
         tSecond_start = time();
-        subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat);
+        subp_dual = createSecond_dual(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat);
 
         # solve the second-stage problem and obtain the worst-case scenario
         uDict, subp_obj = solve_second(subp_dual,hData, groupDict);
@@ -154,7 +154,7 @@ function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT,
         # generate cuts for each appended scenario
         tFirst_start = time();
         push!(uList, uDict);
-        mp = first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,500);
+        mp = first_stage_cut(mp,fData,uData,hData,bData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,500);
 
         # solve the first stage solution to obtain the initial solution
         objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
@@ -164,7 +164,7 @@ function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT,
         # feed the first-stage solution to the second stage problem
         # subp = createSecond(fData,uData,hData,T,groupDict[ci],Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict);
         tSecond_start = time();
-        subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
+        subp_dual = createSecond_dual(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
 
         # solve the second-stage problem and obtain the worst-case scenario
         uDict, subp_obj = solve_second(subp_dual, hData, groupDict);
@@ -179,6 +179,8 @@ function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT,
         push!(solveInfo["iter"], [objhat, tFirst_elapsed, subp_obj, tSecond_elapsed]);
     end    
 
+    objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
+    return objhat,sphat,sqhat,xhat,yhat,zhat,uList,solveInfo;
 end
 
 function test_second(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,gamma_results)

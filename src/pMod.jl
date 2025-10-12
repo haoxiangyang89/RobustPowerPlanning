@@ -9,7 +9,7 @@ function createFirst(fData,uData,hData,bData,T,vmaxT,vminT,θDmaxT,θDminT,xLimi
         end
     end
     # scaling issue exists for this primal problem.
-    mp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 1, "Threads" => no_threads));
+    mp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 0, "Threads" => no_threads));
     set_string_names_on_creation(mp, false);
 
     # obtain the pairs that are connected
@@ -966,7 +966,7 @@ function solve_second(subp, hData, groupDict)
     return uDict, subp_obj;
 end
 
-function first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,iter_limit = 500, parallel_option = true)
+function first_stage_cut(mp,fData,uData,hData,bData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,iter_limit = 500, parallel_option = true)
     # for each scenario, solve the subproblem and generate cuts for the master problem
     cut_iter_bool = true;
     counter = 0;
@@ -1000,12 +1000,12 @@ function first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θ
         # based on this solution, solve the subproblem
         cut_iter_bool = false;
         if parallel_option
-            obj_list, x_coeff_list, y_coeff_list, z_coeff_list = pmap(ω -> solve_dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]), 1:length(uList));
+            sub_results = pmap(ω -> solve_dual_sub_uhat(fData,uData,hData,bData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]), 1:length(uList));
             for ω in eachindex(uList)
-                x_coeff = x_coeff_list[ω];
-                y_coeff = y_coeff_list[ω];
-                z_coeff = z_coeff_list[ω];
-                objV = obj_list[ω];
+                x_coeff = sub_results[ω][2];
+                y_coeff = sub_results[ω][3];
+                z_coeff = sub_results[ω][4];
+                objV = sub_results[ω][1];
 
                 if Vhat < objV - 1e-4
                     cut_iter_bool = true;
@@ -1015,7 +1015,7 @@ function first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θ
             end
         else
             for ω in eachindex(uList)
-                subd = dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]);
+                subd = dual_sub_uhat(fData,uData,hData,bData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]);
                 optimize!(subd);
 
                 x_coeff = shadow_price.(subd[:xIni]);
