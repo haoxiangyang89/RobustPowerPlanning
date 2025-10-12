@@ -41,7 +41,7 @@ function solve_process(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT, θD
         subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
 
         # solve the second-stage problem and obtain the worst-case scenario
-        uDict, subp_obj = solve_second(subp_dual,hData);
+        uDict, subp_obj = solve_second(subp_dual, hData, groupDict);
         tSecond_end = time();
         tSecond_elapsed = tSecond_end - tSecond_start;
 
@@ -106,7 +106,7 @@ function solve_process_para(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT
         subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat);
 
         # solve the second-stage problem and obtain the worst-case scenario
-        uDict, subp_obj = solve_second(subp_dual,hData);
+        uDict, subp_obj = solve_second(subp_dual,hData, groupDict);
         tSecond_end = time();
         tSecond_elapsed = tSecond_end - tSecond_start;
 
@@ -122,6 +122,63 @@ function solve_process_para(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT
     # obtain the optimal value and optimal solution
     objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
     return objhat,sphat,sqhat,xhat,yhat,zhat,uList,solveInfo;
+end
+
+function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT, θDminT, xLimit, groupDict, Γd, Γh, expansion_factor, no_threads = 1)
+    Γ = Dict("d" => Γd, "h" => Γh);
+
+    # create the first-stage model
+    mp = createFirst(fData,uData,hData,bData,T,vmaxT,vminT,θDmaxT,θDminT,xLimit,no_threads);
+
+    # append the all-zero nominal scenario
+    uDict = Dict();
+    uDict["u_dp"] = Dict();
+    uDict["u_dm"] = Dict();
+    uDict["u_hp"] = Dict();
+    uDict["u_hm"] = Dict();
+    for t in 2:T
+        for m in eachindex(groupDict[2])
+            uDict["u_dp"][m,t] = 0;
+            uDict["u_dm"][m,t] = 0;
+        end
+        for i in hData.hList
+            uDict["u_hp"][i,t] = 0;
+            uDict["u_hm"][i,t] = 0;
+        end
+    end
+    solveInfo = Dict("Γ" => [Γd, Γh], "iter" => []);
+    uList = [];
+    keepIter = true;
+
+    while keepIter
+        # generate cuts for each appended scenario
+        tFirst_start = time();
+        push!(uList, uDict);
+        mp = first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,500);
+
+        # solve the first stage solution to obtain the initial solution
+        objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
+        tFirst_end = time();
+        tFirst_elapsed = tFirst_end - tFirst_start;
+
+        # feed the first-stage solution to the second stage problem
+        # subp = createSecond(fData,uData,hData,T,groupDict[ci],Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uDict);
+        tSecond_start = time();
+        subp_dual = createSecond_dual(fData,uData,hData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,no_threads);
+
+        # solve the second-stage problem and obtain the worst-case scenario
+        uDict, subp_obj = solve_second(subp_dual, hData, groupDict);
+        tSecond_end = time();
+        tSecond_elapsed = tSecond_end - tSecond_start;
+
+        # tell when to stop: if the scenario has been generated
+        if uDict in uList
+            keepIter = false;
+        end
+
+        push!(solveInfo["iter"], [objhat, tFirst_elapsed, subp_obj, tSecond_elapsed]);
+    end    
+
 end
 
 function test_second(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,gamma_results)

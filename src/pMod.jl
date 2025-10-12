@@ -263,6 +263,7 @@ function createSecond(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vm
     end
     # scaling issue exists for this primal problem.
     subp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV), "OutputFlag" => 0, "Threads" => 1));
+    # subp = Model(COPT.Optimizer);
 
     # obtain the pairs that are connected
     connectPair = [];
@@ -942,7 +943,7 @@ function solve_first(mp,fData,hData)
     return objhat,sphat,sqhat,xhat,yhat,zhat;
 end
 
-function solve_second(subp, hData)
+function solve_second(subp, hData, groupDict)
     # solve second-stage problem to obtain the solution
     optimize!(subp);
     subp_obj = objective_value(subp);
@@ -953,7 +954,7 @@ function solve_second(subp, hData)
     uDict["u_hp"] = Dict();
     uDict["u_hm"] = Dict();
     for t in 2:T
-        for m in eachindex(groupDict[ci][2])
+        for m in eachindex(groupDict[2])
             uDict["u_dp"][m,t] = value(subp[:u_dp][m,t]);
             uDict["u_dm"][m,t] = value(subp[:u_dm][m,t]);
         end
@@ -963,4 +964,74 @@ function solve_second(subp, hData)
         end
     end
     return uDict, subp_obj;
+end
+
+function first_stage_cut(mp,fData,uData,hData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,iter_limit = 500, parallel_option = true)
+    # for each scenario, solve the subproblem and generate cuts for the master problem
+    cut_iter_bool = true;
+    counter = 0;
+    while (cut_iter_bool)&(counter <= iter_limit)
+        # solve the first stage problem and obtain the solution
+        optimize!(mp);
+        objhat = objective_value(mp);
+
+        Vhat = value(mp[:V]);
+        sphat = Dict();
+        sqhat = Dict();
+        xhat = Dict();
+        yhat = Dict();
+        zhat = Dict();
+        for i in fData.genIDList
+            sphat[i] = value(mp[:sp][i]);
+            sqhat[i] = value(mp[:sq][i]);
+        end
+        for t in 1:T
+            for k in fData.brList
+                xhat[k,t] = value(mp[:x][k,t]);
+            end
+        end
+        for i in fData.IDList
+            yhat[i] = value(mp[:y][i]);
+        end
+        for i in hData.hList
+            zhat[i] = value(mp[:z][i]);
+        end
+
+        # based on this solution, solve the subproblem
+        cut_iter_bool = false;
+        if parallel_option
+            obj_list, x_coeff_list, y_coeff_list, z_coeff_list = pmap(ω -> solve_dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]), 1:length(uList));
+            for ω in eachindex(uList)
+                x_coeff = x_coeff_list[ω];
+                y_coeff = y_coeff_list[ω];
+                z_coeff = z_coeff_list[ω];
+                objV = obj_list[ω];
+
+                if Vhat < objV - 1e-4
+                    cut_iter_bool = true;
+                    @constraint(mp, mp[:V] >= objV + sum(sum(x_coeff[k,t] * (mp[:x][k,t] - xhat[k,t]) for k in fData.brList) for t in 2:T) + 
+                                        sum(y_coeff[i] * (mp[:y][i] - yhat[i]) for i in fData.IDList) + sum(z_coeff[i] * (mp[:z][i] - zhat[i]) for i in hData.hList));
+                end
+            end
+        else
+            for ω in eachindex(uList)
+                subd = dual_sub_uhat(fData,uData,hData,T,groupDict,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,xhat,yhat,zhat,sphat,sqhat,uList[ω]);
+                optimize!(subd);
+
+                x_coeff = shadow_price.(subd[:xIni]);
+                y_coeff = shadow_price.(subd[:yIni]);
+                z_coeff = shadow_price.(subd[:zIni]);
+
+                if Vhat < objective_value(subd) - 1e-4
+                    cut_iter_bool = true;
+                    @constraint(mp, mp[:V] >= objective_value(subd) + sum(sum(x_coeff[k,t] * (mp[:x][k,t] - xhat[k,t]) for k in fData.brList) for t in 2:T) + 
+                                        sum(y_coeff[i] * (mp[:y][i] - yhat[i]) for i in fData.IDList) + sum(z_coeff[i] * (mp[:z][i] - zhat[i]) for i in hData.hList));
+                end
+            end
+        end
+        counter += 1;
+    end
+
+    # return the master problem with generated cuts
+    return mp;
 end

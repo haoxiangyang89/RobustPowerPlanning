@@ -18,7 +18,7 @@ expansion_factor = 0.2;
 fData, bData, hData, dData = readInData(ci,caseList,1e4,1,24);
 uData = makeUAData(fData, hData, dData, T, dαtop, dαbot, hαtop, hαbot);
 groupData = load("../data/groupDict.jld");
-groupDict = groupData["groupDict"];
+groupDict_master = groupData["groupDict"];
 xLimit = 1;
 
 # initialize the bounds
@@ -43,5 +43,5 @@ end
 
 outDict = Dict();
 ΓSet = Iterators.product(1:3,1:3);
-results = pmap(item -> solve_process(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT, θDminT, xLimit, groupDict[ci], item[1], item[2], expansion_factor,5), ΓSet);
+results = pmap(item -> solve_process(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT, θDminT, xLimit, groupDict_master[ci], item[1], item[2], expansion_factor,5), ΓSet);
 save("Gamma_Test.jld","results",results);
