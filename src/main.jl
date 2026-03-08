@@ -148,13 +148,15 @@ function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT,
     end
     solveInfo = Dict("Γ" => [Γd, Γh], "iter" => []);
     uList = [];
+    cut_no_list = [];
     keepIter = true;
 
     while keepIter
         # generate cuts for each appended scenario
         tFirst_start = time();
         push!(uList, uDict);
-        mp = first_stage_cut(mp,fData,uData,hData,bData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,500);
+        mp, cut_counter = first_stage_cut(mp,fData,uData,hData,bData,T,groupDict,vmaxT,vminT,θDmaxT,θDminT,expansion_factor,uList,1000);
+        push!(cut_no_list, cut_counter);
 
         # solve the first stage solution to obtain the initial solution
         objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
@@ -180,7 +182,7 @@ function solve_process_cut(fData, uData, hData, bData, T, vmaxT, vminT, θDmaxT,
     end    
 
     objhat,sphat,sqhat,xhat,yhat,zhat = solve_first(mp,fData,hData);
-    return objhat,sphat,sqhat,xhat,yhat,zhat,uList,solveInfo;
+    return objhat,sphat,sqhat,xhat,yhat,zhat,uList,solveInfo,cut_no_list;
 end
 
 function test_second(fData,uData,hData,bData,T,groupDict,Γ,expansion_factor,vmaxT,vminT,θDmaxT,θDminT,gamma_results)

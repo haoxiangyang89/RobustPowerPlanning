@@ -1033,5 +1033,5 @@ function first_stage_cut(mp,fData,uData,hData,bData,T,groupDict,vmaxT,vminT,θDm
     end
 
     # return the master problem with generated cuts
-    return mp;
+    return mp, counter;
 end
